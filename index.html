@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ポイント期限管理</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1c1c1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ポイント管理">
+<style>
+  :root {
+    --bg: #f5f4f0;
+    --surface: #ffffff;
+    --surface-2: #f0efe9;
+    --border: #e2e0d8;
+    --border-strong: #cfcdc2;
+    --text: #1c1c1a;
+    --text-secondary: #6b6a63;
+    --text-muted: #9a9890;
+    --danger-bg: #fcebeb;
+    --danger-text: #a32d2d;
+    --danger-border: #e24b4a;
+    --warning-bg: #faeeda;
+    --warning-text: #854f0b;
+    --warning-border: #ef9f27;
+    --accent: #185fa5;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .app {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 16px;
+  }
+  h1 {
+    font-size: 18px;
+    font-weight: 500;
+    margin: 0 0 16px;
+  }
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .metric {
+    background: var(--surface-2);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+  }
+  .metric .label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 0 0 4px;
+  }
+  .metric .value {
+    font-size: 20px;
+    font-weight: 500;
+    margin: 0;
+  }
+  .metric .value.danger { color: var(--danger-text); }
+
+  .tabs {
+    display: flex;
+    gap: 20px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+  .tab-btn {
+    background: none;
+    border: none;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    padding: 8px 0;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+  }
+  .tab-btn.active {
+    color: var(--text);
+    border-bottom-color: var(--text);
+  }
+
+  section[hidden] { display: none; }
+
+  .toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .toolbar .hint {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  button {
+    font-family: inherit;
+    font-size: 13px;
+    padding: 7px 12px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+  }
+  button:hover { background: var(--surface-2); }
+  button.primary {
+    background: var(--text);
+    color: var(--surface);
+    border-color: var(--text);
+  }
+  button.primary:hover { opacity: 0.9; }
+  button.icon {
+    padding: 6px 8px;
+  }
+
+  .list {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-left: 3px solid transparent;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .row:last-child { border-bottom: none; }
+  .row.danger { border-left-color: var(--danger-border); }
+  .row.warning { border-left-color: var(--warning-border); }
+  .row.expired { opacity: 0.55; }
+
+  .row .main { flex: 1; min-width: 0; }
+  .row .site { font-size: 14px; font-weight: 500; margin: 0; }
+  .row .expiry { font-size: 12px; color: var(--text-secondary); margin: 2px 0 0; }
+  .row .balance { font-size: 15px; font-weight: 500; white-space: nowrap; }
+  .badge {
+    font-size: 12px;
+    padding: 3px 9px;
+    border-radius: var(--radius);
+    white-space: nowrap;
+  }
+  .badge.danger { background: var(--danger-bg); color: var(--danger-text); }
+  .badge.warning { background: var(--warning-bg); color: var(--warning-text); }
+  .badge.plain { color: var(--text-muted); background: none; padding: 3px 0; }
+
+  .row-actions { display: flex; gap: 4px; }
+
+  .empty {
+    padding: 32px 16px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  .form-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .form-card h2 {
+    font-size: 14px;
+    font-weight: 500;
+    margin: 0 0 12px;
+  }
+  .field { margin-bottom: 10px; }
+  .field label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+  }
+  .field input, .field textarea {
+    width: 100%;
+    font-family: inherit;
+    font-size: 14px;
+    padding: 8px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+  }
+  .field-row {
+    display: flex;
+    gap: 10px;
+  }
+  .field-row .field { flex: 1; }
+  .form-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+
+  a.link-url {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 13px;
+    word-break: break-all;
+  }
+  a.link-url:hover { text-decoration: underline; }
+
+  .settings-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .settings-block h2 {
+    font-size: 14px;
+    font-weight: 500;
+    margin: 0 0 12px;
+  }
+  .settings-block p.desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 6px 0 0;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>ポイント期限管理</h1>
+
+  <div class="metrics">
+    <div class="metric">
+      <p class="label">保有ポイント合計</p>
+      <p class="value" id="metric-total">0 pt</p>
+    </div>
+    <div class="metric">
+      <p class="label" id="metric-red-label">3日以内に失効</p>
+      <p class="value danger" id="metric-danger">0 pt</p>
+    </div>
+    <div class="metric">
+      <p class="label">登録サイト数</p>
+      <p class="value" id="metric-sites">0</p>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="records">ポイント一覧</button>
+    <button class="tab-btn" data-tab="links">リンク集</button>
+    <button class="tab-btn" data-tab="settings">設定</button>
+  </div>
+
+  <section id="tab-records">
+    <div class="form-card" id="record-form-card" hidden>
+      <h2 id="record-form-title">ポイントを追加</h2>
+      <input type="hidden" id="record-id">
+      <div class="field">
+        <label for="record-site">ECサイト名</label>
+        <input type="text" id="record-site" list="site-suggestions" placeholder="楽天市場">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="record-balance">残高(pt)</label>
+          <input type="number" id="record-balance" min="0" step="1" placeholder="1200">
+        </div>
+        <div class="field">
+          <label for="record-expiry">失効期限日</label>
+          <input type="date" id="record-expiry">
+        </div>
+      </div>
+      <div class="field">
+        <label for="record-memo">メモ(任意)</label>
+        <input type="text" id="record-memo" placeholder="夏のセールで獲得">
+      </div>
+      <div class="form-actions">
+        <button id="record-cancel">キャンセル</button>
+        <button class="primary" id="record-save">保存</button>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <span class="hint">期限が近い順</span>
+      <button class="primary" id="record-add-btn">+ ポイントを追加</button>
+    </div>
+
+    <div class="list" id="record-list"></div>
+  </section>
+
+  <section id="tab-links" hidden>
+    <div class="form-card" id="link-form-card" hidden>
+      <h2 id="link-form-title">リンクを追加</h2>
+      <input type="hidden" id="link-id">
+      <div class="field">
+        <label for="link-url">URL</label>
+        <input type="text" id="link-url" placeholder="https://...">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="link-title">タイトル</label>
+          <input type="text" id="link-title" placeholder="夏のポイント3倍キャンペーン">
+        </div>
+        <div class="field">
+          <label for="link-site">ECサイト名</label>
+          <input type="text" id="link-site" list="site-suggestions" placeholder="楽天市場">
+        </div>
+      </div>
+      <div class="field">
+        <label for="link-memo">メモ(任意)</label>
+        <input type="text" id="link-memo">
+      </div>
+      <div class="form-actions">
+        <button id="link-cancel">キャンセル</button>
+        <button class="primary" id="link-save">保存</button>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <span class="hint">セール・キャンペーン情報のリンク集</span>
+      <button class="primary" id="link-add-btn">+ リンクを追加</button>
+    </div>
+
+    <div class="list" id="link-list"></div>
+  </section>
+
+  <section id="tab-settings" hidden>
+    <div class="settings-block">
+      <h2>アラート閾値</h2>
+      <div class="field-row">
+        <div class="field">
+          <label for="setting-red">赤(危険)になる日数</label>
+          <input type="number" id="setting-red" min="0" step="1">
+        </div>
+        <div class="field">
+          <label for="setting-yellow">黄(注意)になる日数</label>
+          <input type="number" id="setting-yellow" min="0" step="1">
+        </div>
+      </div>
+      <p class="desc">残り日数がこの値以下になったレコードを一覧で強調表示します。</p>
+    </div>
+
+    <div class="settings-block">
+      <h2>データのバックアップ</h2>
+      <div class="form-actions" style="justify-content: flex-start;">
+        <button id="export-btn">JSONをエクスポート</button>
+        <button id="import-btn">JSONをインポート</button>
+        <input type="file" id="import-file" accept="application/json" hidden>
+      </div>
+      <p class="desc">ブラウザ内にのみ保存されるため、端末変更時はエクスポートしたファイルを新しい環境でインポートしてください。</p>
+    </div>
+  </section>
+
+  <datalist id="site-suggestions"></datalist>
+</div>
+
+<script>
+(function () {
+  const STORAGE_KEY = "pointManagerData";
+
+  function defaultData() {
+    return {
+      records: [],
+      links: [],
+      settings: { redDays: 3, yellowDays: 7 }
+    };
+  }
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return defaultData();
+      const parsed = JSON.parse(raw);
+      return Object.assign(defaultData(), parsed, {
+        records: parsed.records || [],
+        links: parsed.links || [],
+        settings: Object.assign(defaultData().settings, parsed.settings || {})
+      });
+    } catch (e) {
+      return defaultData();
+    }
+  }
+
+  function save() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+
+  let state = load();
+
+  function uid() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+
+  function daysUntil(dateStr) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const target = new Date(dateStr + "T00:00:00");
+    return Math.round((target - today) / 86400000);
+  }
+
+  function formatNumber(n) {
+    return Number(n || 0).toLocaleString("ja-JP");
+  }
+
+  // ---- Tabs ----
+  const tabButtons = document.querySelectorAll(".tab-btn");
+  const tabSections = {
+    records: document.getElementById("tab-records"),
+    links: document.getElementById("tab-links"),
+    settings: document.getElementById("tab-settings")
+  };
+  tabButtons.forEach(btn => {
+    btn.addEventListener("click", () => {
+      tabButtons.forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      Object.keys(tabSections).forEach(key => {
+        tabSections[key].hidden = key !== btn.dataset.tab;
+      });
+    });
+  });
+
+  // ---- Site name suggestions ----
+  function refreshSiteSuggestions() {
+    const sites = new Set();
+    state.records.forEach(r => r.site && sites.add(r.site));
+    state.links.forEach(l => l.site && sites.add(l.site));
+    const datalist = document.getElementById("site-suggestions");
+    datalist.innerHTML = "";
+    sites.forEach(site => {
+      const opt = document.createElement("option");
+      opt.value = site;
+      datalist.appendChild(opt);
+    });
+  }
+
+  // ---- Metrics ----
+  function renderMetrics() {
+    const activeRecords = state.records.filter(r => daysUntil(r.expiry) >= 0);
+    const total = activeRecords.reduce((sum, r) => sum + Number(r.balance || 0), 0);
+    const dangerTotal = activeRecords
+      .filter(r => daysUntil(r.expiry) <= state.settings.redDays)
+      .reduce((sum, r) => sum + Number(r.balance || 0), 0);
+    const sites = new Set(state.records.map(r => r.site));
+
+    document.getElementById("metric-total").textContent = formatNumber(total) + " pt";
+    document.getElementById("metric-red-label").textContent = state.settings.redDays + "日以内に失効";
+    document.getElementById("metric-danger").textContent = formatNumber(dangerTotal) + " pt";
+    document.getElementById("metric-sites").textContent = sites.size;
+  }
+
+  // ---- Records ----
+  const recordList = document.getElementById("record-list");
+  const recordFormCard = document.getElementById("record-form-card");
+  const recordFormTitle = document.getElementById("record-form-title");
+
+  function renderRecords() {
+    const active = state.records.filter(r => daysUntil(r.expiry) >= 0)
+      .sort((a, b) => daysUntil(a.expiry) - daysUntil(b.expiry));
+    const expired = state.records.filter(r => daysUntil(r.expiry) < 0)
+      .sort((a, b) => daysUntil(b.expiry) - daysUntil(a.expiry));
+    const ordered = active.concat(expired);
+
+    recordList.innerHTML = "";
+    if (ordered.length === 0) {
+      recordList.innerHTML = '<div class="empty">登録されたポイントはまだありません</div>';
+      return;
+    }
+
+    ordered.forEach(r => {
+      const days = daysUntil(r.expiry);
+      const row = document.createElement("div");
+      row.className = "row";
+      let badgeHtml;
+      if (days < 0) {
+        row.classList.add("expired");
+        badgeHtml = '<span class="badge plain">失効済み</span>';
+      } else if (days <= state.settings.redDays) {
+        row.classList.add("danger");
+        badgeHtml = '<span class="badge danger">あと' + days + '日</span>';
+      } else if (days <= state.settings.yellowDays) {
+        row.classList.add("warning");
+        badgeHtml = '<span class="badge warning">あと' + days + '日</span>';
+      } else {
+        badgeHtml = '<span class="badge plain">あと' + days + '日</span>';
+      }
+
+      row.innerHTML =
+        '<div class="main">' +
+          '<p class="site"></p>' +
+          '<p class="expiry">期限 ' + r.expiry + (r.memo ? ' ・ ' + escapeHtml(r.memo) : '') + '</p>' +
+        '</div>' +
+        '<span class="balance">' + formatNumber(r.balance) + ' pt</span>' +
+        badgeHtml +
+        '<div class="row-actions">' +
+          '<button class="icon" data-action="edit" data-id="' + r.id + '">編集</button>' +
+          '<button class="icon" data-action="delete" data-id="' + r.id + '">削除</button>' +
+        '</div>';
+      row.querySelector(".site").textContent = r.site;
+      recordList.appendChild(row);
+    });
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function showRecordForm(record) {
+    recordFormCard.hidden = false;
+    recordFormTitle.textContent = record ? "ポイントを編集" : "ポイントを追加";
+    document.getElementById("record-id").value = record ? record.id : "";
+    document.getElementById("record-site").value = record ? record.site : "";
+    document.getElementById("record-balance").value = record ? record.balance : "";
+    document.getElementById("record-expiry").value = record ? record.expiry : "";
+    document.getElementById("record-memo").value = record ? record.memo || "" : "";
+  }
+
+  function hideRecordForm() {
+    recordFormCard.hidden = true;
+  }
+
+  document.getElementById("record-add-btn").addEventListener("click", () => showRecordForm(null));
+  document.getElementById("record-cancel").addEventListener("click", hideRecordForm);
+
+  document.getElementById("record-save").addEventListener("click", () => {
+    const id = document.getElementById("record-id").value;
+    const site = document.getElementById("record-site").value.trim();
+    const balance = document.getElementById("record-balance").value;
+    const expiry = document.getElementById("record-expiry").value;
+    const memo = document.getElementById("record-memo").value.trim();
+
+    if (!site || balance === "" || !expiry) {
+      alert("ECサイト名・残高・失効期限日は必須です。");
+      return;
+    }
+
+    if (id) {
+      const target = state.records.find(r => r.id === id);
+      Object.assign(target, { site, balance: Number(balance), expiry, memo });
+    } else {
+      state.records.push({ id: uid(), site, balance: Number(balance), expiry, memo });
+    }
+
+    save();
+    hideRecordForm();
+    refreshSiteSuggestions();
+    renderRecords();
+    renderMetrics();
+  });
+
+  recordList.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-action]");
+    if (!btn) return;
+    const id = btn.dataset.id;
+    if (btn.dataset.action === "edit") {
+      const record = state.records.find(r => r.id === id);
+      showRecordForm(record);
+    } else if (btn.dataset.action === "delete") {
+      if (confirm("このレコードを削除しますか?")) {
+        state.records = state.records.filter(r => r.id !== id);
+        save();
+        renderRecords();
+        renderMetrics();
+        refreshSiteSuggestions();
+      }
+    }
+  });
+
+  // ---- Links ----
+  const linkList = document.getElementById("link-list");
+  const linkFormCard = document.getElementById("link-form-card");
+  const linkFormTitle = document.getElementById("link-form-title");
+
+  function renderLinks() {
+    linkList.innerHTML = "";
+    if (state.links.length === 0) {
+      linkList.innerHTML = '<div class="empty">登録されたリンクはまだありません</div>';
+      return;
+    }
+    state.links.forEach(l => {
+      const row = document.createElement("div");
+      row.className = "row";
+      row.innerHTML =
+        '<div class="main">' +
+          '<p class="site"></p>' +
+          '<p class="expiry"><span class="site-tag"></span>' + (l.memo ? ' ・ ' + escapeHtml(l.memo) : '') + '</p>' +
+          '<a class="link-url" target="_blank" rel="noopener"></a>' +
+        '</div>' +
+        '<div class="row-actions">' +
+          '<button class="icon" data-action="edit" data-id="' + l.id + '">編集</button>' +
+          '<button class="icon" data-action="delete" data-id="' + l.id + '">削除</button>' +
+        '</div>';
+      row.querySelector(".site").textContent = l.title;
+      row.querySelector(".site-tag").textContent = l.site || "サイト未設定";
+      const a = row.querySelector(".link-url");
+      a.textContent = l.url;
+      a.href = l.url;
+      linkList.appendChild(row);
+    });
+  }
+
+  function showLinkForm(link) {
+    linkFormCard.hidden = false;
+    linkFormTitle.textContent = link ? "リンクを編集" : "リンクを追加";
+    document.getElementById("link-id").value = link ? link.id : "";
+    document.getElementById("link-url").value = link ? link.url : "";
+    document.getElementById("link-title").value = link ? link.title : "";
+    document.getElementById("link-site").value = link ? link.site || "" : "";
+    document.getElementById("link-memo").value = link ? link.memo || "" : "";
+  }
+
+  function hideLinkForm() {
+    linkFormCard.hidden = true;
+  }
+
+  document.getElementById("link-add-btn").addEventListener("click", () => showLinkForm(null));
+  document.getElementById("link-cancel").addEventListener("click", hideLinkForm);
+
+  document.getElementById("link-save").addEventListener("click", () => {
+    const id = document.getElementById("link-id").value;
+    const url = document.getElementById("link-url").value.trim();
+    const title = document.getElementById("link-title").value.trim();
+    const site = document.getElementById("link-site").value.trim();
+    const memo = document.getElementById("link-memo").value.trim();
+
+    if (!url || !title) {
+      alert("URLとタイトルは必須です。");
+      return;
+    }
+
+    if (id) {
+      const target = state.links.find(l => l.id === id);
+      Object.assign(target, { url, title, site, memo });
+    } else {
+      state.links.push({ id: uid(), url, title, site, memo });
+    }
+
+    save();
+    hideLinkForm();
+    refreshSiteSuggestions();
+    renderLinks();
+  });
+
+  linkList.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-action]");
+    if (!btn) return;
+    const id = btn.dataset.id;
+    if (btn.dataset.action === "edit") {
+      const link = state.links.find(l => l.id === id);
+      showLinkForm(link);
+    } else if (btn.dataset.action === "delete") {
+      if (confirm("このリンクを削除しますか?")) {
+        state.links = state.links.filter(l => l.id !== id);
+        save();
+        renderLinks();
+        refreshSiteSuggestions();
+      }
+    }
+  });
+
+  // ---- Settings ----
+  const settingRed = document.getElementById("setting-red");
+  const settingYellow = document.getElementById("setting-yellow");
+
+  function renderSettings() {
+    settingRed.value = state.settings.redDays;
+    settingYellow.value = state.settings.yellowDays;
+  }
+
+  function updateThreshold() {
+    const red = Number(settingRed.value);
+    const yellow = Number(settingYellow.value);
+    if (Number.isNaN(red) || Number.isNaN(yellow) || red < 0 || yellow < 0) return;
+    state.settings.redDays = red;
+    state.settings.yellowDays = yellow;
+    save();
+    renderRecords();
+    renderMetrics();
+  }
+
+  settingRed.addEventListener("change", updateThreshold);
+  settingYellow.addEventListener("change", updateThreshold);
+
+  document.getElementById("export-btn").addEventListener("click", () => {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const today = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = "point-manager-backup-" + today + ".json";
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  const importInput = document.getElementById("import-file");
+  document.getElementById("import-btn").addEventListener("click", () => importInput.click());
+  importInput.addEventListener("change", () => {
+    const file = importInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        if (!confirm("現在のデータを上書きしてインポートします。よろしいですか?")) return;
+        state = Object.assign(defaultData(), parsed, {
+          records: parsed.records || [],
+          links: parsed.links || [],
+          settings: Object.assign(defaultData().settings, parsed.settings || {})
+        });
+        save();
+        refreshSiteSuggestions();
+        renderRecords();
+        renderLinks();
+        renderSettings();
+        renderMetrics();
+        alert("インポートが完了しました。");
+      } catch (e) {
+        alert("JSONファイルの読み込みに失敗しました。");
+      }
+      importInput.value = "";
+    };
+    reader.readAsText(file);
+  });
+
+  // ---- Init ----
+  refreshSiteSuggestions();
+  renderRecords();
+  renderLinks();
+  renderSettings();
+  renderMetrics();
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>
