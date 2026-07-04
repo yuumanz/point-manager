@@ -196,6 +196,51 @@
     background: var(--surface);
     color: var(--text);
   }
+  .site-input {
+    position: relative;
+    display: flex;
+  }
+  .site-input input {
+    padding-right: 34px;
+  }
+  .site-toggle {
+    position: absolute;
+    right: 2px;
+    top: 2px;
+    bottom: 2px;
+    width: 32px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+  }
+  .site-toggle:hover { background: var(--surface-2); border-radius: var(--radius); }
+  .site-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 10;
+    max-height: 180px;
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  }
+  .site-option {
+    padding: 9px 12px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .site-option:hover { background: var(--surface-2); }
+  .site-option-empty {
+    padding: 9px 12px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
   .field-row {
     display: flex;
     gap: 10px;
@@ -265,7 +310,11 @@
       <input type="hidden" id="record-id">
       <div class="field">
         <label for="record-site">ECサイト名</label>
-        <input type="text" id="record-site" list="site-suggestions" placeholder="楽天市場">
+        <div class="site-input" data-site-input>
+          <input type="text" id="record-site" placeholder="楽天市場" autocomplete="off">
+          <button type="button" class="site-toggle" aria-label="候補を表示">▾</button>
+          <div class="site-dropdown" hidden></div>
+        </div>
       </div>
       <div class="field-row">
         <div class="field">
@@ -310,7 +359,11 @@
         </div>
         <div class="field">
           <label for="link-site">ECサイト名</label>
-          <input type="text" id="link-site" list="site-suggestions" placeholder="楽天市場">
+          <div class="site-input" data-site-input>
+            <input type="text" id="link-site" placeholder="楽天市場" autocomplete="off">
+            <button type="button" class="site-toggle" aria-label="候補を表示">▾</button>
+            <div class="site-dropdown" hidden></div>
+          </div>
         </div>
       </div>
       <div class="field">
@@ -358,7 +411,6 @@
     </div>
   </section>
 
-  <datalist id="site-suggestions"></datalist>
 </div>
 
 <script>
@@ -427,18 +479,66 @@
   });
 
   // ---- Site name suggestions ----
-  function refreshSiteSuggestions() {
+  function getKnownSites() {
     const sites = new Set();
     state.records.forEach(r => r.site && sites.add(r.site));
     state.links.forEach(l => l.site && sites.add(l.site));
-    const datalist = document.getElementById("site-suggestions");
-    datalist.innerHTML = "";
-    sites.forEach(site => {
-      const opt = document.createElement("option");
-      opt.value = site;
-      datalist.appendChild(opt);
+    return Array.from(sites);
+  }
+
+  function setupSiteAutocomplete(container) {
+    const input = container.querySelector("input");
+    const toggle = container.querySelector(".site-toggle");
+    const dropdown = container.querySelector(".site-dropdown");
+
+    function renderOptions(filterText) {
+      const filter = (filterText || "").trim().toLowerCase();
+      const sites = getKnownSites().filter(site =>
+        !filter || site.toLowerCase().includes(filter)
+      );
+      dropdown.innerHTML = "";
+      if (sites.length === 0) {
+        dropdown.innerHTML = '<div class="site-option-empty">候補はありません</div>';
+        return;
+      }
+      sites.forEach(site => {
+        const opt = document.createElement("div");
+        opt.className = "site-option";
+        opt.textContent = site;
+        opt.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          input.value = site;
+          closeDropdown();
+        });
+        dropdown.appendChild(opt);
+      });
+    }
+
+    function openDropdown() {
+      renderOptions(input.value);
+      dropdown.hidden = false;
+    }
+
+    function closeDropdown() {
+      dropdown.hidden = true;
+    }
+
+    toggle.addEventListener("click", () => {
+      if (dropdown.hidden) {
+        openDropdown();
+      } else {
+        closeDropdown();
+      }
+    });
+
+    input.addEventListener("focus", openDropdown);
+    input.addEventListener("input", () => renderOptions(input.value));
+    document.addEventListener("click", (e) => {
+      if (!container.contains(e.target)) closeDropdown();
     });
   }
+
+  document.querySelectorAll("[data-site-input]").forEach(setupSiteAutocomplete);
 
   // ---- Metrics ----
   function renderMetrics() {
@@ -551,7 +651,6 @@
 
     save();
     hideRecordForm();
-    refreshSiteSuggestions();
     renderRecords();
     renderMetrics();
   });
@@ -569,7 +668,6 @@
         save();
         renderRecords();
         renderMetrics();
-        refreshSiteSuggestions();
       }
     }
   });
@@ -645,7 +743,6 @@
 
     save();
     hideLinkForm();
-    refreshSiteSuggestions();
     renderLinks();
   });
 
@@ -661,7 +758,6 @@
         state.links = state.links.filter(l => l.id !== id);
         save();
         renderLinks();
-        refreshSiteSuggestions();
       }
     }
   });
@@ -716,7 +812,6 @@
           settings: Object.assign(defaultData().settings, parsed.settings || {})
         });
         save();
-        refreshSiteSuggestions();
         renderRecords();
         renderLinks();
         renderSettings();
@@ -731,7 +826,6 @@
   });
 
   // ---- Init ----
-  refreshSiteSuggestions();
   renderRecords();
   renderLinks();
   renderSettings();
